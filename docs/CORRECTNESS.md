@@ -11,7 +11,7 @@ success. Orchestrators must:
 
 Machine-readable helper lines: `CLI_AGENT_RESULT: PASS|FAIL|SKIPPED|BLOCKED …`
 
-## agy PTY (issue #76)
+## agy PTY ([gemini-cli#76](https://github.com/google-gemini/gemini-cli/issues/76))
 
 `agy -p` drops all stdout when not a TTY. Always use `agy-exec.sh` / `lib/pty_run.py`.
 `script -q /dev/null` fails on socket stdin (`tcgetattr: Operation not supported`).

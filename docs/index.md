@@ -1,6 +1,8 @@
 ---
 title: agent-cli-skills
-description: Open-source Agent Skills wrappers for agy, grok, Claude Code, Codex, Kimi, and Qwen CLIs
+description: >-
+  Open-source Agent Skills wrappers for agy, Grok, Claude Code, Codex, Kimi, and Qwen,
+  plus multi-cli-spawn with PID-safe parallel seats and .status completion contract
 ---
 
 # agent-cli-skills
@@ -11,15 +13,15 @@ Skill wrappers and a cross-CLI spawn harness for popular agentic coding CLIs.
 
 ## Skills
 
-| Skill | CLI |
-|-------|-----|
-| `agy-cli-agent` | Antigravity (`agy`) |
-| `grok-cli-agent` | Grok Build (`grok`) |
-| `claude-cli-agent` | Claude Code (`claude`) |
-| `codex-cli-agent` | Codex (`codex exec`) |
-| `kimi-cli-agent` | Kimi Code (`kimi`) |
-| `qwen-cli-agent` | Qwen Code (`qwen`) |
-| `multi-cli-spawn` | Parallel cross-CLI seats |
+| Skill | CLI | Notes |
+|-------|-----|-------|
+| `agy-cli-agent` | Antigravity (`agy`) | PTY required for headless `-p` |
+| `grok-cli-agent` | Grok Build (`grok`) | Native `spawn_subagent` |
+| `claude-cli-agent` | Claude Code (`claude`) | ultracode / workflows via `-T` |
+| `codex-cli-agent` | Codex (`codex exec`) | Sandbox-aware writes |
+| `kimi-cli-agent` | Kimi Code (`kimi`) | Soft `-r`; quota → BLOCKED |
+| `qwen-cli-agent` | Qwen Code (`qwen`) | Agent tool / review helpers |
+| `multi-cli-spawn` | Parallel cross-CLI seats | `.status` wait contract |
 
 ## Docs
 
@@ -30,7 +32,9 @@ Skill wrappers and a cross-CLI spawn harness for popular agentic coding CLIs.
 
 ```bash
 git clone https://github.com/ImL1s/agent-cli-skills.git
-cd agent-cli-skills && ./install.sh
+cd agent-cli-skills
+chmod +x install.sh skills/*/*.sh lib/*.py
+./install.sh
 ```
 
 MIT License.

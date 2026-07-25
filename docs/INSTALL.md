@@ -50,12 +50,18 @@ Manifests: [`.claude-plugin/marketplace.json`](https://github.com/ImL1s/agent-cl
 ```bash
 git clone https://github.com/ImL1s/agent-cli-skills.git
 cd agent-cli-skills
-chmod +x install.sh skills/*/*.sh lib/*.py
-./install.sh                 # ~/.claude|codex|agents|gemini|qwen|kimi-code/skills
-./install.sh --target ~/.cursor/skills -y 2>/dev/null || ./install.sh --target "$HOME/.cursor/skills"
+chmod +x install.sh skills/*/*.sh lib/*.py scripts/*.sh tests/smoke.sh
+./install.sh                 # ~/.claude|codex|agents|gemini|qwen (+ kimi-code if present)
+./install.sh --target "$HOME/.cursor/skills"
 ./install.sh --dry-run
-./install.sh --uninstall
+./install.sh --uninstall     # removes symlinks only
 ```
+
+Notes:
+
+- `install.sh` has **no** `-y` flag. Unknown args error out.
+- If a destination already exists (real directory or different symlink), that skill is **skipped** (soft) so one conflict does not abort the whole install. Remove the old path or `--uninstall` first, then re-run.
+- `--uninstall` only unlinks **symlinks** created by this installer. Copied (non-symlink) skill trees are left in place on purpose.
 
 ## 4) Manual copy / zip (Claude.ai web Skills, air-gapped)
 
@@ -90,5 +96,8 @@ export AGENT_CLI_SKILLS_ROOT=/path/to/agent-cli-skills
 ```bash
 # After any install method:
 ~/.claude/skills/agy-cli-agent/agy-exec.sh --help
+~/.claude/skills/multi-cli-spawn/spawn.sh --help
 bash /path/to/clone/tests/smoke.sh
 ```
+
+Flags drift: after upgrading a vendor CLI, re-check `<cli> --help` against [FEATURES.md](FEATURES.md).

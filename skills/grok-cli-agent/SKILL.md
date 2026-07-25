@@ -1,11 +1,17 @@
 ---
 name: grok-cli-agent
 description: >
-  Delegate execution or read-only review to xAI Grok Build CLI (grok) headlessly.
-  Use when the user wants to run grok, Grok Build, or spawn grok subagents.
+  Run xAI Grok Build CLI headlessly via grok-exec.sh. Use when the user asks for grok, Grok Build,
+  xAI coding agent, spawn_subagent, or grok worktrees. -r is plan mode with write/shell denied;
+  -T asks for native subagent fan-out; -w enables --worktree. No PTY required. Orchestrator owns git.
 ---
 
 # Grok Build CLI (`grok`) Executor
+
+## When to use
+
+- User wants **grok** / Grok Build as the coding agent
+- Need Grok `spawn_subagent`, `--agents` JSON, or `--worktree` isolation from an orchestrator
 
 ## Wrapper
 
@@ -22,6 +28,7 @@ Flags: `-m` · `-t` · `-C` · `-e` effort · `-o` plain|json|streaming-json · 
 `--max-turns` · `--json-schema` · `--rules` · `--disable-web-search` · `--no-git` · `--` passthrough.
 
 Default model: `grok-4.5` (`grok models`). No PTY needed — headless `-p` works on pipes.
+`-C` is absolutized before use.
 
 ## Native multi-agent
 

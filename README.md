@@ -15,7 +15,7 @@ Open-source **skill wrappers** for popular agentic coding CLIs. Use them as [Age
 | `qwen-cli-agent` | Alibaba Qwen Code (`qwen`) | `qwen-exec.sh` |
 | `multi-cli-spawn` | all of the above | `spawn.sh` |
 
-Layout inspired by umbrella skill repos (e.g. Harzva’s everything-agent adapters) and thin per-CLI skills (e.g. x-agent): **shared `lib/` + installable `skills/*`**.
+Layout: **shared `lib/` + installable `skills/*`** (each skill embeds `lib/` so symlink and `--copy` installs both work).
 
 ## Install
 
@@ -32,7 +32,10 @@ claude plugin marketplace add "$(pwd)"
 claude plugin install agent-cli-skills@agent-cli-skills
 
 # 3) Manual symlink into agent skill dirs
-./install.sh && ./install.sh --dry-run
+chmod +x install.sh skills/*/*.sh lib/*.py scripts/*.sh tests/smoke.sh
+./install.sh
+./install.sh --target "$HOME/.cursor/skills"
+./install.sh --dry-run
 
 # 4) Zip / copy one skill (includes embedded lib/)
 cd skills && zip -r /tmp/agy-cli-agent.zip agy-cli-agent
@@ -55,9 +58,10 @@ Headless wrappers skip permissions by default — prefer disposable git worktree
 ./skills/claude-cli-agent/claude-exec.sh -T -C ~/src/myapp "Audit and migrate …"
 ./skills/agy-cli-agent/agy-exec.sh -T -C ~/src/myapp "Large coordinated refactor …"
 
-# Cross-CLI council (PID-safe)
+# Cross-CLI council (PID-safe; wait in foreground)
 ./skills/multi-cli-spawn/spawn.sh --outdir /tmp/council-$$ -f /tmp/brief.md \
   --seat claude:ultracode --seat codex:team --seat agy:readonly --seat grok
+# → CLI_AGENT_RESULT lines + <seat>.md / .status (RUNNING→DONE|BLOCKED)
 ```
 
 Passthrough any vendor flag after `--`:
@@ -68,15 +72,16 @@ Passthrough any vendor flag after `--`:
 
 ## Docs
 
-- [docs/FEATURES.md](docs/FEATURES.md) — flag / multi-agent matrix
-- [docs/CORRECTNESS.md](docs/CORRECTNESS.md) — PTY, sandbox, git, quota traps
+- [docs/INSTALL.md](docs/INSTALL.md) — install paths (npx / plugin / symlink / zip)
+- [docs/FEATURES.md](docs/FEATURES.md) — flag / multi-agent matrix + spawn outputs
+- [docs/CORRECTNESS.md](docs/CORRECTNESS.md) — PTY, sandbox, git, quota, status polling traps
 
 ## Design rules
 
 1. **Orchestrator owns git** — wrappers accept `--no-git`; never trust the agent with reset/checkout on accumulation branches
 2. **Exit codes are untrusted** — verify diffs and tests
-3. **Parallel seats use PID files** — never `pkill -f` long patterns
-4. **agy always gets a PTY** — see issue #76
+3. **Parallel seats use PID files + `.status`** — never `pkill -f` long patterns; poll terminal status, not `.md` absence
+4. **agy always gets a PTY** — [gemini-cli#76](https://github.com/google-gemini/gemini-cli/issues/76)
 5. **Native teamwork is vendor-owned** — `-T` requests it; we do not fake `/teamwork-preview` or ultracode runtimes
 
 ## Related projects

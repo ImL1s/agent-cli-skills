@@ -9,7 +9,7 @@ kimi 0.29.x, qwen 0.20.x, claude 2.1.x, codex 0.145.x. Re-check with `<cli> --he
 |------|---------|
 | `-m` | Model id |
 | `-t` | Wall / print timeout |
-| `-C` | Working directory |
+| `-C` | Working directory (absolutized by wrappers) |
 | `-f` | Prompt file (preferred for long bundles) |
 | `-o` | Output format (where supported) |
 | `-r` | Read-only / plan / sandbox |
@@ -17,12 +17,14 @@ kimi 0.29.x, qwen 0.20.x, claude 2.1.x, codex 0.145.x. Re-check with `<cli> --he
 | `--no-git` | Prepend no git-write guard |
 | `--` | Passthrough remaining args to the underlying CLI |
 
+Missing flag values print `error: <flag> requires a value` (exit 2) instead of `unbound variable`.
+
 ## Per-CLI capabilities
 
 | Capability | agy | grok | claude | codex | kimi | qwen |
 |------------|-----|------|--------|-------|------|------|
 | Headless print / exec | `-p` + **PTY** | `-p` / `--prompt-file` | `-p` | `codex exec` | `-p` | `-p` |
-| Skip permissions | `--dangerously-skip-permissions` | `bypassPermissions` | `--dangerously-skip-permissions` | sandbox + approvals flags | auto on `-p` | auto / `--sandbox` |
+| Skip permissions | `--dangerously-skip-permissions` | `bypassPermissions` | `--dangerously-skip-permissions` (cleared by `-r`/`-P`) | sandbox + approvals flags | auto on `-p` | auto / `--sandbox` |
 | Read-only mode | `--mode plan` + sandbox | `--permission-mode plan` | `--permission-mode plan` | `-s read-only` | soft prompt guard | `--sandbox` + guard |
 | Worktree isolation | (manual) | `--worktree` | `--worktree` | (manual / review helpers) | (manual) | `qwen review` worktrees |
 | Custom agents | `--agent`, `.agents/agents/` | `--agent`, `--agents` JSON | `--agents` JSON, `claude agents` | `~/.codex/agents/*.toml` | `--agent`, `--agent-file` | `.qwen/agents/`, `/agents` |
@@ -36,6 +38,7 @@ kimi 0.29.x, qwen 0.20.x, claude 2.1.x, codex 0.145.x. Re-check with `<cli> --he
 - Slash: `/teamwork-preview` (preview, Ultra), `/agents`
 - CLI: `--agent`, `--mode`, `--effort`, `--sandbox`, `--add-dir`, `--print-timeout`
 - Custom agents: markdown under `.agents/agents/`
+- **PTY required** for `-p` — always use `agy-exec.sh` ([gemini-cli#76](https://github.com/google-gemini/gemini-cli/issues/76))
 
 ### claude
 - `--effort ultracode` or interactive `/effort ultracode` → auto dynamic workflows
@@ -64,3 +67,16 @@ kimi 0.29.x, qwen 0.20.x, claude 2.1.x, codex 0.145.x. Re-check with `<cli> --he
 ## Cross-CLI: `multi-cli-spawn`
 
 See [skills/multi-cli-spawn/SKILL.md](../skills/multi-cli-spawn/SKILL.md).
+
+| Flag / artifact | Meaning |
+|-----------------|---------|
+| `--outdir` / `-O` | Required output directory |
+| `--seat name[:mods][@label]` | One parallel provider seat |
+| `-f` / prompt args | Shared brief |
+| `-t` / `-C` / `-r` | Timeout, cwd, all-seats readonly |
+| `--no-wait` | Return after spawn; poll `.status` yourself |
+| `<key>.status` | `RUNNING` → `DONE rc=0` \| `BLOCKED rc=N` |
+| `spawn.status` | Parent `RUNNING` → `DONE` (or `SPAWNED` if `--no-wait`) |
+| `CLI_AGENT_RESULT` | `PASS` / `BLOCKED` per seat after wait mode |
+
+**Waiting:** prefer foreground wait. Do not treat missing `*.md` mid-run as failure — answers are written when each seat finishes.

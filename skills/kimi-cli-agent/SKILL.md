@@ -1,11 +1,18 @@
 ---
 name: kimi-cli-agent
 description: >
-  Delegate execution or read-only review to Moonshot Kimi Code CLI (kimi) headlessly.
-  Use when the user wants to run kimi, Kimi Code, or kimi agent profiles.
+  Run Moonshot Kimi Code CLI headlessly via kimi-exec.sh. Use when the user asks for kimi,
+  Kimi Code, Moonshot coding agent, or kimi agent profiles (--agent / --agent-file). -r is a
+  soft read-only prompt guard; -p auto-approves tools. On 403 usage limit mark BLOCKED — do not
+  retry-loop. Orchestrator owns git (--no-git).
 ---
 
 # Kimi Code CLI (`kimi`) Executor
+
+## When to use
+
+- User wants **kimi** / Kimi Code as the coding agent
+- Need Kimi agent Markdown profiles or built-in sub-agents from an orchestrator
 
 ## Wrapper
 
@@ -20,6 +27,7 @@ Flags: `-m` (default `kimi-code/k3`) · `-t` · `-C` · `-o` text|json|stream-js
 `-T` · `--agent` · `--agent-file` · `--skills-dir` · `--add-dir` · `--no-git` · `--` passthrough.
 
 No PTY needed. Wrapper always runs `--output-format stream-json` internally and cleans to text/json.
+`-C` is absolutized; `--add-dir` uses the physical workspace path.
 
 ## Headless permission model
 

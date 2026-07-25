@@ -22,6 +22,8 @@ Default targets (created if missing):
   ~/.kimi-code/skills   (if ~/.kimi-code exists)
 
 Each skill directory under skills/ is symlinked as DIR/<skill-name>.
+Existing destinations are skipped (remove or --uninstall first).
+--uninstall removes symlinks only (copied trees are left in place).
 EOF
 }
 

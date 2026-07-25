@@ -5,13 +5,13 @@
     "email": ""
   },
   "metadata": {
-    "description": "Headless wrappers and Agent Skills for agy, Grok, Claude Code, Codex, Kimi, and Qwen, plus cross-CLI spawn",
-    "version": "1.1.0"
+    "description": "Headless wrappers and Agent Skills for agy, Grok, Claude Code, Codex, Kimi, and Qwen, plus multi-cli-spawn with PID-safe seats and .status completion",
+    "version": "1.2.0"
   },
   "plugins": [
     {
       "name": "agent-cli-skills",
-      "description": "Multi-vendor coding CLI executor skills (agy/grok/claude/codex/kimi/qwen) and multi-cli-spawn",
+      "description": "Multi-vendor coding CLI executor skills (agy/grok/claude/codex/kimi/qwen) and multi-cli-spawn council harness",
       "source": "./",
       "strict": false,
       "skills": [

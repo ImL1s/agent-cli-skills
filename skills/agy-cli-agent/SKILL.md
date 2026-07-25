@@ -1,11 +1,22 @@
 ---
 name: agy-cli-agent
 description: >
-  Delegate hands-on coding/execution to Google Antigravity CLI (agy) headlessly.
-  Use when the user wants to run agy, Antigravity, or use agy as a plan executor.
+  Run Google Antigravity CLI (agy) headlessly via agy-exec.sh / agy-task.sh / agy-explore.sh.
+  Use when the user asks for agy, Antigravity, Gemini CLI agent, or to execute a plan with agy.
+  Always allocates a PTY (agy -p is silent without TTY). Prefer -f for long prompts; --no-git
+  and orchestrator-owned commits. -r plan/sandbox; -T teamwork/subagent preamble.
 ---
 
 # Antigravity CLI (`agy`) Executor
+
+## When to use
+
+- User wants **agy** / Antigravity as the coding agent
+- Orchestrator needs a **headless** agy run (pipes, CI, council seats)
+- Plan-executor / explore helpers (`agy-task.sh`, `agy-explore.sh`)
+
+Prefer other `*-cli-agent` skills when the user names Claude, Codex, Grok, Kimi, or Qwen.
+For multi-provider parallel opinions, use `multi-cli-spawn`.
 
 ## Wrapper
 
@@ -23,10 +34,12 @@ Shared flags: `-m` model · `-t` print-timeout · `-C` cwd · `-f` prompt-file �
 `--add-dir` · `--no-git` · `--` passthrough to `agy`.
 
 Default model: `gemini-3.5-flash-high`. Discover ids with `agy models`.
+`-C` is absolutized before use (relative paths are safe).
 
 ## Critical: PTY required
 
-`agy -p` **prints nothing** unless stdout is a real TTY ([issue #76](https://github.com/google-gemini/gemini-cli/issues)).
+`agy -p` **prints nothing** unless stdout is a real TTY
+([gemini-cli#76](https://github.com/google-gemini/gemini-cli/issues/76)).
 This wrapper always uses `lib/pty_run.py`. Do not call bare `agy -p` from pipes/subprocesses.
 
 ## Native multi-agent

@@ -1,11 +1,21 @@
 ---
 name: claude-cli-agent
 description: >
-  Delegate execution or read-only review to Anthropic Claude Code CLI (claude -p) headlessly.
-  Use when the user wants Claude Code, ultracode/workflows, or Claude subagents/agent teams.
+  Run Anthropic Claude Code headlessly via claude-exec.sh (claude -p). Use when the user asks
+  for Claude Code, claude CLI, ultracode, Claude workflows, agent teams, or Claude subagents.
+  -r is plan mode (clears skip-permissions); -T/--ultracode enables effort ultracode + multi-agent
+  preamble; -P sets permission-mode. Orchestrator owns git (--no-git).
 ---
 
 # Claude Code CLI (`claude -p`) Executor
+
+## When to use
+
+- User wants **Claude Code** / `claude` as the coding agent
+- Need **ultracode**, workflows, `--agents`, or worktree isolation from an orchestrator
+- Read-only second opinions (`-r` plan mode)
+
+For cross-CLI councils, pair with `multi-cli-spawn`.
 
 ## Wrapper
 
@@ -23,7 +33,8 @@ Flags: `-m` · `-t` · `-C` · `-o` text|json|stream-json · `-f` · `-r` (plan 
 `--add-dir` · `--system-prompt` · `--append-system-prompt` · `--mcp-config` ·
 `--strict-mcp-config` · `--bare` · `--ask-permissions` · `--no-git` · `--` passthrough.
 
-Default executor uses `--dangerously-skip-permissions`. Prefer capturing **stdout** for reports.
+Default executor uses `--dangerously-skip-permissions`. Setting `-P` or `-r` clears that skip.
+Prefer capturing **stdout** for reports. `-C` is absolutized before use.
 
 ## Native multi-agent / ultracode
 

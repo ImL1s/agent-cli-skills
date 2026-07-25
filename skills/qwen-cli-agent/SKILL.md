@@ -1,11 +1,18 @@
 ---
 name: qwen-cli-agent
 description: >
-  Delegate execution or read-only review to Alibaba Qwen Code CLI (qwen) headlessly.
-  Use when the user wants to run qwen, Qwen Code, or qwen review helpers.
+  Run Alibaba Qwen Code CLI headlessly via qwen-exec.sh. Use when the user asks for qwen,
+  Qwen Code, or qwen review / Agent-tool subagents. -r enables sandbox + read-only guard; -T
+  asks for Agent tool / configured subagents. On 429/quota mark BLOCKED — do not retry-loop.
+  Orchestrator owns git (--no-git).
 ---
 
 # Qwen Code CLI (`qwen`) Executor
+
+## When to use
+
+- User wants **qwen** / Qwen Code as the coding agent
+- Need Qwen `/agents`, Agent tool parallel launches, or `qwen review` style workflows from a wrapper
 
 ## Wrapper
 
@@ -19,6 +26,7 @@ Flags: `-m` (default `qwen3.8-max-preview`) · `-t` · `-C` · `-o` text|json|st
 `-r` (sandbox + read-only guard) · `-T` subagent preamble · `--no-git` · `--` passthrough.
 
 No PTY needed. Text mode extracts final `result` via `lib/parse_stream_json.py`.
+`-C` is absolutized before use.
 
 ## Native multi-agent
 

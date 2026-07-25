@@ -1,11 +1,19 @@
 ---
 name: codex-cli-agent
 description: >
-  Delegate execution or review to OpenAI Codex CLI (codex exec) headlessly.
-  Use when the user wants Codex, GPT coding agent, or Codex subagents / CSV fan-out.
+  Run OpenAI Codex CLI headlessly via codex-exec.sh (codex exec). Use when the user asks for
+  Codex, GPT coding agent, codex exec, Codex subagents, or spawn_agents_on_csv. -r / read-only
+  sandbox blocks workspace writes — use -s workspace-write when the prompt must write files.
+  -T prefers subagents. Orchestrator owns git (--no-git).
 ---
 
 # Codex CLI (`codex exec`) Executor
+
+## When to use
+
+- User wants **Codex** / `codex exec` as the coding agent
+- Need Codex **subagents**, agent TOML profiles, or CSV fan-out
+- Sandboxed writes (`-s workspace-write`) vs strict read-only reviews (`-r`)
 
 ## Wrapper
 
@@ -20,6 +28,8 @@ description: >
 Flags: `-m` · `-t` · `-C` · `-s` read-only|workspace-write|danger-full-access · `-o` last-message file ·
 `-f` · `-j/--json` · `-r` · `-T` · `--skip-git-repo-check` (default on) · `--require-git-repo` ·
 `--ephemeral` · `--add-dir` · `--image` · `--enable` · `--profile` · `--no-git` · `--` passthrough.
+
+`-C` is absolutized before use (avoids nested relative cwd).
 
 ## Sandbox vs writing answer files
 
