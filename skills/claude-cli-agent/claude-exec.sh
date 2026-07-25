@@ -55,26 +55,26 @@ set -- "${CLI_AGENT_BEFORE_DASHDASH[@]+"${CLI_AGENT_BEFORE_DASHDASH[@]}"}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
-    -o) OUTFMT="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
+    -m) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODEL="$2"; shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
+    -o) cli_agent_need_arg "$1" "${2:-}" || exit 2; OUTFMT="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
     -r) RO=1; shift ;;
     -T|--team|--native-multi|--ultracode) TEAM=1; shift ;;
-    -P|--permission-mode) PERM="$2"; shift 2 ;;
-    -e|--effort) EFFORT="$2"; shift 2 ;;
+    -P|--permission-mode) cli_agent_need_arg "$1" "${2:-}" || exit 2; PERM="$2"; SKIP_PERMS=0; shift 2 ;;
+    -e|--effort) cli_agent_need_arg "$1" "${2:-}" || exit 2; EFFORT="$2"; shift 2 ;;
     -w|--worktree)
       if [ $# -ge 2 ] && [[ "${2:-}" != -* ]]; then WORKTREE="$2"; shift 2
       else WORKTREE="auto"; shift; fi
       ;;
-    --agents) AGENTS_JSON="$2"; shift 2 ;;
-    --allowed-tools) ALLOWED="$2"; shift 2 ;;
-    --disallowed-tools) DISALLOWED="$2"; shift 2 ;;
+    --agents) cli_agent_need_arg "$1" "${2:-}" || exit 2; AGENTS_JSON="$2"; shift 2 ;;
+    --allowed-tools) cli_agent_need_arg "$1" "${2:-}" || exit 2; ALLOWED="$2"; shift 2 ;;
+    --disallowed-tools) cli_agent_need_arg "$1" "${2:-}" || exit 2; DISALLOWED="$2"; shift 2 ;;
     --add-dir) ADD_DIRS+=("$2"); shift 2 ;;
-    --system-prompt) SYS_PROMPT="$2"; shift 2 ;;
-    --append-system-prompt) APPEND_SYS="$2"; shift 2 ;;
-    --mcp-config) MCP_CONFIG="$2"; shift 2 ;;
+    --system-prompt) cli_agent_need_arg "$1" "${2:-}" || exit 2; SYS_PROMPT="$2"; shift 2 ;;
+    --append-system-prompt) cli_agent_need_arg "$1" "${2:-}" || exit 2; APPEND_SYS="$2"; shift 2 ;;
+    --mcp-config) cli_agent_need_arg "$1" "${2:-}" || exit 2; MCP_CONFIG="$2"; shift 2 ;;
     --strict-mcp-config) STRICT_MCP=1; shift ;;
     --bare) BARE=1; shift ;;
     --ask-permissions) SKIP_PERMS=0; shift ;;
@@ -92,6 +92,11 @@ while [ $# -gt 0 ]; do
 done
 
 CALLER_PWD="$PWD"
+# Absolutize -C so relative paths are not re-resolved after cd.
+if [ -n "$WORKDIR" ] && [ "$WORKDIR" != "." ]; then
+  WORKDIR="$(cli_agent_abspath "$WORKDIR" "${CALLER_PWD:-$PWD}")"
+fi
+
 
 cli_agent_require_bin claude "$HOME/.local/bin" || exit 127
 if [ -n "$PROMPTFILE" ]; then
@@ -103,11 +108,15 @@ cli_agent_load_prompt "$PROMPTFILE" "$@" || exit $?
 PROMPT="$CLI_AGENT_PROMPT"
 
 if [ "$RO" -eq 1 ]; then
-  PROMPT="$(cli_agent_readonly_guard)$PROMPT"
+  PROMPT="$(cli_agent_readonly_guard)
+
+$PROMPT"
   PERM="${PERM:-plan}"
   SKIP_PERMS=0
 fi
-if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)$PROMPT"; fi
+if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)
+
+$PROMPT"; fi
 if [ "$TEAM" -eq 1 ]; then
   EFFORT="${EFFORT:-ultracode}"
   PROMPT="[NATIVE MULTI-AGENT / ULTRACODE] Prefer a dynamic workflow with parallel subagents for substantive work. Synthesize one final answer.

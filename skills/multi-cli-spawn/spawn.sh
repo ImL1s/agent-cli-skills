@@ -66,7 +66,9 @@ OUTDIR="$(cd "$OUTDIR" && pwd -P)"
 BRIEF="$OUTDIR/brief.md"
 if [ -n "$PROMPTFILE" ]; then
   PROMPTFILE="$(cli_agent_abspath "$PROMPTFILE" "$CALLER_PWD")"
-  cp "$PROMPTFILE" "$BRIEF"
+  if [ "$(cli_agent_abspath "$PROMPTFILE")" != "$BRIEF" ] && [ "$PROMPTFILE" != "$BRIEF" ]; then
+    cp "$PROMPTFILE" "$BRIEF"
+  fi
 else
   cli_agent_load_prompt "" "$@" || exit $?
   printf '%s\n' "$CLI_AGENT_PROMPT" >"$BRIEF"
@@ -82,6 +84,13 @@ resolve_exec() {
   return 1
 }
 
+# Stronger quota/auth detection — avoid bare "429" false positives.
+cli_agent_seat_blocked_log() {
+  local log="$1"
+  # Avoid bare "429" — review text often discusses rate limits without being blocked.
+  grep -qiE     "provider\.api_error|You've reached your usage limit|rate limit exceeded|status[=:][[:space:]]*429([[:space:]]|$)|HTTP 429 (Too Many|Error)|403 You've reached|Not logged in|Agent execution terminated due to error|error: '[^']+' not found in PATH|error: \"[^\"]+\" not found in PATH|error: [^ ]+ not found in PATH"     "$log"
+}
+
 PIDS=()
 NAMES=()
 USED_KEYS=()
@@ -93,6 +102,9 @@ key_taken() {
   done
   return 1
 }
+
+# Enable job control in THIS shell so each background seat gets its own PGID (= $!).
+set -m
 
 for seat in "${SEATS[@]}"; do
   label=""
@@ -124,8 +136,11 @@ for seat in "${SEATS[@]}"; do
 
   flags=(-C "$WORKDIR" -t "$TIMEOUT" -f "$BRIEF" --no-git)
   [ "$READONLY_ALL" -eq 1 ] && flags+=(-r)
-  IFS=',' read -ra parts <<<"$meta"
-  for p in "${parts[@]}"; do
+  parts=()
+  if [ -n "$meta" ]; then
+    IFS=',' read -ra parts <<<"$meta"
+  fi
+  for p in "${parts[@]+"${parts[@]}"}"; do
     case "$p" in
       "" ) ;;
       r|ro|readonly|ask) flags+=(-r) ;;
@@ -137,15 +152,22 @@ for seat in "${SEATS[@]}"; do
   log="$OUTDIR/$key.log"
   ans="$OUTDIR/$key.md"
   pidf="$OUTDIR/$key.pid"
+  rcfile="$OUTDIR/$key.rc"
 
   (
     set +e
-    set -m
     "$exec_path" "${flags[@]}" >"$log" 2>&1
     rc=$?
-    if [ ! -s "$log" ]; then
+    echo "$rc" >"$rcfile"
+    if [ "$rc" -ne 0 ]; then
+      {
+        echo "BLOCKED: seat exited rc=$rc"
+        echo
+        tail -n 80 "$log"
+      } >"$ans"
+    elif [ ! -s "$log" ]; then
       echo "BLOCKED: empty output (rc=$rc). Check auth/quota/PTY." >"$ans"
-    elif grep -qiE 'usage limit|rate limit|429|403 You.ve reached|Not logged in|Agent execution terminated due to error' "$log"; then
+    elif cli_agent_seat_blocked_log "$log"; then
       {
         echo "BLOCKED: provider error/quota"
         echo
@@ -155,12 +177,13 @@ for seat in "${SEATS[@]}"; do
       cp "$log" "$ans"
     fi
     echo "DONE rc=$rc" >>"$log"
+    exit "$rc"
   ) &
   spid=$!
   cli_agent_write_pid "$pidf" "$spid"
   PIDS+=("$spid")
   NAMES+=("$key")
-  echo "started seat=$key pid=$spid log=$log"
+  echo "started seat=$key pid=$spid pgid=$spid log=$log"
 done
 
 if [ "${#PIDS[@]}" -eq 0 ]; then
@@ -174,16 +197,23 @@ if [ "$WAIT" -eq 1 ]; then
   for i in "${!PIDS[@]}"; do
     pid="${PIDS[$i]}"
     name="${NAMES[$i]}"
-    if wait "$pid"; then
+    set +e
+    wait "$pid"
+    wrc=$?
+    set -e
+    if [ "$wrc" -eq 0 ]; then
       echo "seat=$name finished ok"
     else
-      echo "seat=$name finished nonzero" >&2
+      echo "seat=$name finished nonzero rc=$wrc" >&2
       fail=1
     fi
   done
   echo "answers in $OUTDIR/*.md"
   for name in "${NAMES[@]+"${NAMES[@]}"}"; do
-    if grep -q '^BLOCKED' "$OUTDIR/$name.md" 2>/dev/null; then
+    if [ -f "$OUTDIR/$name.md" ] && grep -q '^BLOCKED' "$OUTDIR/$name.md" 2>/dev/null; then
+      cli_agent_result BLOCKED "$name"
+      fail=1
+    elif [ -f "$OUTDIR/$name.rc" ] && [ "$(tr -d '[:space:]' <"$OUTDIR/$name.rc")" != "0" ]; then
       cli_agent_result BLOCKED "$name"
       fail=1
     else
@@ -193,5 +223,5 @@ if [ "$WAIT" -eq 1 ]; then
   exit "$fail"
 fi
 
-echo "spawned without wait; kill with:"
-echo "  for f in $OUTDIR/*.pid; do kill -- \"-\$(cat \$f)\" 2>/dev/null || kill \"\$(cat \$f)\"; done"
+echo "spawned without wait; kill process groups with:"
+echo "  for f in $OUTDIR/*.pid; do kill -- \"-\$(tr -d '[:space:]' <\"\$f\")\" 2>/dev/null || kill \"\$(tr -d '[:space:]' <\"\$f\")\"; done"

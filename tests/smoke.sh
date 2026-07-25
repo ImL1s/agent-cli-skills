@@ -139,6 +139,46 @@ else
   bad "pty_run help"
 fi
 
+
+# --- spawn: missing CLI must BLOCKED not PASS ---
+SP2="$(mktemp -d)"
+mkdir -p "$SP2/skills/fakecli-cli-agent"
+cat > "$SP2/skills/fakecli-cli-agent/fakecli-exec.sh" <<'EOS'
+#!/usr/bin/env bash
+echo "error: 'fakecli' not found in PATH" >&2
+exit 127
+EOS
+chmod +x "$SP2/skills/fakecli-cli-agent/fakecli-exec.sh"
+# Point find_exec via AGENT_CLI_SKILLS_ROOT
+set +e
+out="$(AGENT_CLI_SKILLS_ROOT="$SP2" "$ROOT/skills/multi-cli-spawn/spawn.sh" --outdir "$SP2/out" --seat fakecli -- "hi" 2>&1)"
+rc=$?
+set -e
+echo "$out" | grep -q 'CLI_AGENT_RESULT: BLOCKED fakecli' && pass "spawn missing=BLOCKED" || bad "spawn missing=BLOCKED: $out"
+[ "$rc" -ne 0 ] && pass "spawn missing nonzero" || bad "spawn missing nonzero rc=$rc"
+# 429 in review text must NOT block
+mkdir -p "$SP2/skills/okcli-cli-agent"
+cat > "$SP2/skills/okcli-cli-agent/okcli-exec.sh" <<'EOS'
+#!/usr/bin/env bash
+echo "We discussed HTTP 429 handling in the docs; all good."
+exit 0
+EOS
+chmod +x "$SP2/skills/okcli-cli-agent/okcli-exec.sh"
+set +e
+out="$(AGENT_CLI_SKILLS_ROOT="$SP2" "$ROOT/skills/multi-cli-spawn/spawn.sh" --outdir "$SP2/out429" --seat okcli -- "hi" 2>&1)"
+rc=$?
+set -e
+echo "$out" | grep -q 'CLI_AGENT_RESULT: PASS okcli' && pass "spawn 429 text=PASS" || bad "spawn 429 text=PASS: $out"
+[ "$rc" -eq 0 ] && pass "spawn 429 rc0" || bad "spawn 429 rc=$rc"
+rm -rf "$SP2"
+
+# --- need_arg ---
+set +e
+"$ROOT/skills/agy-cli-agent/agy-exec.sh" -m 2>/tmp/agy-need.err
+rc=$?
+set -e
+grep -q 'requires a value' /tmp/agy-need.err && pass "agy need_arg" || bad "agy need_arg"
+
 if [ "$fail" -eq 0 ]; then
   echo "ALL SMOKE TESTS PASSED"
   exit 0

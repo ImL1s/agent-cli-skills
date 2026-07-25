@@ -38,17 +38,17 @@ set -- "${CLI_AGENT_BEFORE_DASHDASH[@]+"${CLI_AGENT_BEFORE_DASHDASH[@]}"}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
-    -o) OUTFMT="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
+    -m) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODEL="$2"; shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
+    -o) cli_agent_need_arg "$1" "${2:-}" || exit 2; OUTFMT="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
     -r) RO=1; shift ;;
     -T|--team|--native-multi) TEAM=1; shift ;;
-    --agent) AGENT="$2"; shift 2 ;;
-    --agent-file) AGENT_FILE="$2"; shift 2 ;;
+    --agent) cli_agent_need_arg "$1" "${2:-}" || exit 2; AGENT="$2"; shift 2 ;;
+    --agent-file) cli_agent_need_arg "$1" "${2:-}" || exit 2; AGENT_FILE="$2"; shift 2 ;;
     --skills-dir) SKILLS_DIRS+=("$2"); shift 2 ;;
-    --add-dir) ADD_DIRS+=("$2"); shift 2 ;;
+    --add-dir) cli_agent_need_arg "$1" "${2:-}" || exit 2; ADD_DIRS+=("$2"); shift 2 ;;
     --no-git) NOGIT=1; shift ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
@@ -63,6 +63,11 @@ while [ $# -gt 0 ]; do
 done
 
 CALLER_PWD="$PWD"
+# Absolutize -C so relative paths are not re-resolved after cd.
+if [ -n "$WORKDIR" ] && [ "$WORKDIR" != "." ]; then
+  WORKDIR="$(cli_agent_abspath "$WORKDIR" "${CALLER_PWD:-$PWD}")"
+fi
+
 
 cli_agent_require_bin kimi "$HOME/.kimi-code/bin" || exit 127
 if [ -n "$PROMPTFILE" ]; then
@@ -73,8 +78,12 @@ cd "$WORKDIR" || { echo "error: cannot cd into $WORKDIR" >&2; exit 1; }
 cli_agent_load_prompt "$PROMPTFILE" "$@" || exit $?
 PROMPT="$CLI_AGENT_PROMPT"
 
-if [ "$RO" -eq 1 ]; then PROMPT="$(cli_agent_readonly_guard)$PROMPT"; fi
-if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)$PROMPT"; fi
+if [ "$RO" -eq 1 ]; then PROMPT="$(cli_agent_readonly_guard)
+
+$PROMPT"; fi
+if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)
+
+$PROMPT"; fi
 if [ "$TEAM" -eq 1 ]; then
   PROMPT="[NATIVE MULTI-AGENT] Use available sub-agents / agent profiles. Delegate specialized work and return one synthesized answer.
 
@@ -82,10 +91,10 @@ $PROMPT"
 fi
 
 CMD=(kimi -p "$PROMPT" --model "$MODEL" --output-format stream-json)
+CMD+=(--add-dir "$(pwd -P)")
 [ -n "$AGENT" ] && CMD+=(--agent "$AGENT")
 [ -n "$AGENT_FILE" ] && CMD+=(--agent-file "$AGENT_FILE")
 for d in "${SKILLS_DIRS[@]+"${SKILLS_DIRS[@]}"}"; do CMD+=(--skills-dir "$d"); done
-if [ "$WORKDIR" != "." ]; then CMD+=(--add-dir "$WORKDIR"); fi
 for d in "${ADD_DIRS[@]+"${ADD_DIRS[@]}"}"; do CMD+=(--add-dir "$d"); done
 CMD+=("${CLI_AGENT_PASSTHROUGH[@]+"${CLI_AGENT_PASSTHROUGH[@]}"}")
 

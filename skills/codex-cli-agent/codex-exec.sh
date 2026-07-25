@@ -44,12 +44,12 @@ set -- "${CLI_AGENT_BEFORE_DASHDASH[@]+"${CLI_AGENT_BEFORE_DASHDASH[@]}"}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
-    -s) SANDBOX="$2"; shift 2 ;;
-    -o) OUT_LAST="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
+    -m) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODEL="$2"; shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
+    -s) cli_agent_need_arg "$1" "${2:-}" || exit 2; SANDBOX="$2"; shift 2 ;;
+    -o) cli_agent_need_arg "$1" "${2:-}" || exit 2; OUT_LAST="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
     -j|--json) JSON=1; shift ;;
     -r) RO=1; shift ;;
     -T|--team|--native-multi) TEAM=1; shift ;;
@@ -59,7 +59,7 @@ while [ $# -gt 0 ]; do
     --add-dir) ADD_DIRS+=("$2"); shift 2 ;;
     --image) IMAGES+=("$2"); shift 2 ;;
     --enable) ENABLES+=("$2"); shift 2 ;;
-    --profile) PROFILE="$2"; shift 2 ;;
+    --profile) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROFILE="$2"; shift 2 ;;
     --no-git) NOGIT=1; shift ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
@@ -74,6 +74,11 @@ while [ $# -gt 0 ]; do
 done
 
 CALLER_PWD="$PWD"
+# Absolutize -C so relative paths are not re-resolved after cd.
+if [ -n "$WORKDIR" ] && [ "$WORKDIR" != "." ]; then
+  WORKDIR="$(cli_agent_abspath "$WORKDIR" "${CALLER_PWD:-$PWD}")"
+fi
+
 
 cli_agent_require_bin codex || exit 127
 if [ -n "$PROMPTFILE" ]; then
@@ -85,10 +90,14 @@ cli_agent_load_prompt "$PROMPTFILE" "$@" || exit $?
 PROMPT="$CLI_AGENT_PROMPT"
 
 if [ "$RO" -eq 1 ]; then
-  PROMPT="$(cli_agent_readonly_guard)$PROMPT"
+  PROMPT="$(cli_agent_readonly_guard)
+
+$PROMPT"
   SANDBOX="read-only"
 fi
-if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)$PROMPT"; fi
+if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)
+
+$PROMPT"; fi
 if [ "$TEAM" -eq 1 ]; then
   PROMPT="[NATIVE MULTI-AGENT] Prefer Codex subagents for parallelizable work. For row-oriented batches use spawn_agents_on_csv. Synthesize one final answer.
 

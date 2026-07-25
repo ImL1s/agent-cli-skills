@@ -27,7 +27,13 @@ EOF
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --target) TARGETS+=("$2"); shift 2 ;;
+    --target)
+      if [ -z "${2:-}" ] || [[ "${2:-}" == -* ]]; then
+        echo "error: --target requires a directory" >&2
+        exit 2
+      fi
+      TARGETS+=("$2"); shift 2
+      ;;
     --uninstall) UNINSTALL=1; shift ;;
     --dry-run) DRY=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -70,15 +76,27 @@ link_one() {
   [ "$DRY" -eq 1 ] || ln -s "$src" "$dest"
 }
 
-rc=0
+linked=0
+skipped=0
 for t in "${TARGETS[@]}"; do
   if [ "$DRY" -eq 0 ]; then
     mkdir -p "$t"
+  else
+    echo "dry-run target: $t"
   fi
   for skill_dir in "$SKILLS_SRC"/*/; do
     [ -d "$skill_dir" ] || continue
     name="$(basename "$skill_dir")"
-    link_one "$(cd "$skill_dir" && pwd)" "$t/$name" || rc=1
+    if link_one "$(cd "$skill_dir" && pwd)" "$t/$name"; then
+      linked=$((linked + 1))
+    else
+      skipped=$((skipped + 1))
+    fi
   done
 done
-exit "$rc"
+echo "install summary: linked=$linked skipped=$skipped"
+# Non-zero only when nothing could be linked and not dry-run uninstall
+if [ "$UNINSTALL" -eq 0 ] && [ "$DRY" -eq 0 ] && [ "$linked" -eq 0 ]; then
+  exit 1
+fi
+exit 0

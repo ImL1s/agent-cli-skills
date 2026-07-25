@@ -57,3 +57,9 @@ Do not retry-loop.
 - [ ] Tests / analyze from the plan pass
 - [ ] No secrets committed
 - [ ] Parallel seats did not clobber the same paths
+
+## multi-cli-spawn result & kill semantics
+
+- Seat exit `rc != 0` → `BLOCKED` (missing binary / crash is not a vote).
+- Quota detection avoids bare `429` (review prose mentioning HTTP 429 must not wipe answers).
+- Parent enables `set -m` before backgrounding so pidfile PID == process group; kill with `kill -- -$pid`.

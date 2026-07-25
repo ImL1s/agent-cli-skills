@@ -30,11 +30,11 @@ set -- "${CLI_AGENT_BEFORE_DASHDASH[@]+"${CLI_AGENT_BEFORE_DASHDASH[@]}"}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
-    -o) OUTFMT="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
+    -m) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODEL="$2"; shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
+    -o) cli_agent_need_arg "$1" "${2:-}" || exit 2; OUTFMT="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
     -r) RO=1; shift ;;
     -T|--team|--native-multi) TEAM=1; shift ;;
     --no-git) NOGIT=1; shift ;;
@@ -51,6 +51,11 @@ while [ $# -gt 0 ]; do
 done
 
 CALLER_PWD="$PWD"
+# Absolutize -C so relative paths are not re-resolved after cd.
+if [ -n "$WORKDIR" ] && [ "$WORKDIR" != "." ]; then
+  WORKDIR="$(cli_agent_abspath "$WORKDIR" "${CALLER_PWD:-$PWD}")"
+fi
+
 
 cli_agent_require_bin qwen "$HOME/.local/bin" || exit 127
 if [ -n "$PROMPTFILE" ]; then
@@ -63,17 +68,25 @@ PROMPT="$CLI_AGENT_PROMPT"
 
 EXTRA=()
 if [ "$RO" -eq 1 ]; then
-  PROMPT="$(cli_agent_readonly_guard)$PROMPT"
+  PROMPT="$(cli_agent_readonly_guard)
+
+$PROMPT"
   EXTRA+=(--sandbox)
 fi
-if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)$PROMPT"; fi
+if [ "$NOGIT" -eq 1 ]; then PROMPT="$(cli_agent_no_git_guard)
+
+$PROMPT"; fi
 if [ "$TEAM" -eq 1 ]; then
   PROMPT="[NATIVE MULTI-AGENT] Use the Agent tool / configured subagents (/agents). Parallelize independent work and synthesize one answer.
 
 $PROMPT"
 fi
 
-CMD=(qwen -p "$PROMPT" -m "$MODEL" -o json "${EXTRA[@]+"${EXTRA[@]}"}")
+QWEN_OUT=json
+[ "$OUTFMT" = "text" ] && QWEN_OUT=json
+[ "$OUTFMT" = "stream-json" ] && QWEN_OUT=stream-json
+[ "$OUTFMT" = "json" ] && QWEN_OUT=json
+CMD=(qwen -p "$PROMPT" -m "$MODEL" -o "$QWEN_OUT" "${EXTRA[@]+"${EXTRA[@]}"}")
 CMD+=("${CLI_AGENT_PASSTHROUGH[@]+"${CLI_AGENT_PASSTHROUGH[@]}"}")
 
 run() { cli_agent_run_timeout "$TIMEOUT" -- "${CMD[@]}"; }

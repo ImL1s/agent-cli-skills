@@ -45,23 +45,22 @@ AGENT=""
 MODE=""
 EFFORT=""
 ADD_DIRS=()
-EXTRA=()
 
 cli_agent_split_passthrough "$@"
 set -- "${CLI_AGENT_BEFORE_DASHDASH[@]+"${CLI_AGENT_BEFORE_DASHDASH[@]}"}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m) MODEL="$2"; shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
+    -m) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODEL="$2"; shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
     -r) RO=1; shift ;;
     -s) SANDBOX=1; shift ;;
     -T|--team|--native-multi) TEAM=1; shift ;;
-    --agent) AGENT="$2"; shift 2 ;;
-    --mode) MODE="$2"; shift 2 ;;
-    --effort) EFFORT="$2"; shift 2 ;;
+    --agent) cli_agent_need_arg "$1" "${2:-}" || exit 2; AGENT="$2"; shift 2 ;;
+    --mode) cli_agent_need_arg "$1" "${2:-}" || exit 2; MODE="$2"; shift 2 ;;
+    --effort) cli_agent_need_arg "$1" "${2:-}" || exit 2; EFFORT="$2"; shift 2 ;;
     --add-dir) ADD_DIRS+=("$2"); shift 2 ;;
     --no-git) NOGIT=1; shift ;;
     -h|--help)
@@ -78,6 +77,11 @@ while [ $# -gt 0 ]; do
 done
 
 CALLER_PWD="$PWD"
+# Absolutize -C so relative paths are not re-resolved after cd.
+if [ -n "$WORKDIR" ] && [ "$WORKDIR" != "." ]; then
+  WORKDIR="$(cli_agent_abspath "$WORKDIR" "${CALLER_PWD:-$PWD}")"
+fi
+
 
 cli_agent_require_bin agy "$HOME/.local/bin" || exit 127
 if [ -n "$PROMPTFILE" ]; then
@@ -89,12 +93,16 @@ cli_agent_load_prompt "$PROMPTFILE" "$@" || exit $?
 PROMPT="$CLI_AGENT_PROMPT"
 
 if [ "$RO" -eq 1 ]; then
-  PROMPT="$(cli_agent_readonly_guard)$PROMPT"
+  PROMPT="$(cli_agent_readonly_guard)
+
+$PROMPT"
   SANDBOX=1
   [ -z "$MODE" ] && MODE="plan"
 fi
 if [ "$NOGIT" -eq 1 ]; then
-  PROMPT="$(cli_agent_no_git_guard)$PROMPT"
+  PROMPT="$(cli_agent_no_git_guard)
+
+$PROMPT"
 fi
 if [ "$TEAM" -eq 1 ]; then
   PROMPT="[NATIVE MULTI-AGENT] Prefer Antigravity teamwork / subagent orchestration for this task.
