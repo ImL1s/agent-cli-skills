@@ -12,6 +12,10 @@
 #   name:readonly,team    → both
 #   name@label            → unique output key (avoids clobber on duplicate CLIs)
 #
+# Outputs per seat: <key>.log .md .pid .rc .status
+#   .status lifecycle: RUNNING … → DONE rc=0 | BLOCKED rc=N
+# Prefer foreground wait (default). For --no-wait, poll terminal .status — not .md absence.
+#
 # Never use pkill -f with long patterns. Kill only via numeric PIDs in *.pid files.
 set -euo pipefail
 
@@ -66,8 +70,14 @@ OUTDIR="$(cd "$OUTDIR" && pwd -P)"
 BRIEF="$OUTDIR/brief.md"
 if [ -n "$PROMPTFILE" ]; then
   PROMPTFILE="$(cli_agent_abspath "$PROMPTFILE" "$CALLER_PWD")"
-  if [ "$(cli_agent_abspath "$PROMPTFILE")" != "$BRIEF" ] && [ "$PROMPTFILE" != "$BRIEF" ]; then
-    cp "$PROMPTFILE" "$BRIEF"
+  # -ef compares inode — immune to /tmp vs /private/tmp on macOS.
+  if [ -f "$PROMPTFILE" ]; then
+    if [ ! -e "$BRIEF" ] || ! [ "$PROMPTFILE" -ef "$BRIEF" ]; then
+      cp "$PROMPTFILE" "$BRIEF"
+    fi
+  else
+    echo "error: prompt file not found: $PROMPTFILE" >&2
+    exit 2
   fi
 else
   cli_agent_load_prompt "" "$@" || exit $?
@@ -91,6 +101,15 @@ cli_agent_seat_blocked_log() {
   grep -qiE     "provider\.api_error|You've reached your usage limit|rate limit exceeded|status[=:][[:space:]]*429([[:space:]]|$)|HTTP 429 (Too Many|Error)|403 You've reached|Not logged in|Agent execution terminated due to error|error: '[^']+' not found in PATH|error: \"[^\"]+\" not found in PATH|error: [^ ]+ not found in PATH"     "$log"
 }
 
+seat_terminal_blocked() {
+  local key="$1"
+  local rc="${2:-127}"
+  local msg="${3:-BLOCKED}"
+  printf '%s\n' "$msg" >"$OUTDIR/$key.md"
+  printf '%s\n' "$rc" >"$OUTDIR/$key.rc"
+  cli_agent_write_status "$OUTDIR/$key.status" "BLOCKED rc=$rc"
+}
+
 PIDS=()
 NAMES=()
 USED_KEYS=()
@@ -102,6 +121,9 @@ key_taken() {
   done
   return 1
 }
+
+cli_agent_write_pid "$OUTDIR/spawn.pid" "$$"
+cli_agent_write_status "$OUTDIR/spawn.status" "RUNNING"
 
 # Enable job control in THIS shell so each background seat gets its own PGID (= $!).
 set -m
@@ -125,12 +147,12 @@ for seat in "${SEATS[@]}"; do
   USED_KEYS+=("$key")
 
   if ! exec_path="$(resolve_exec "$name")"; then
-    echo "BLOCKED unknown seat: $seat" >"$OUTDIR/$key.md"
+    seat_terminal_blocked "$key" 127 "BLOCKED unknown seat: $seat"
     echo "error: unknown seat CLI '$name'" >&2
     continue
   fi
   if [ ! -x "$exec_path" ]; then
-    echo "BLOCKED: wrapper not executable: $exec_path" >"$OUTDIR/$key.md"
+    seat_terminal_blocked "$key" 126 "BLOCKED: wrapper not executable: $exec_path"
     continue
   fi
 
@@ -153,21 +175,28 @@ for seat in "${SEATS[@]}"; do
   ans="$OUTDIR/$key.md"
   pidf="$OUTDIR/$key.pid"
   rcfile="$OUTDIR/$key.rc"
+  statusf="$OUTDIR/$key.status"
 
+  # RUNNING before & — seat writes terminal status last (avoids parent clobber race).
+  cli_agent_write_status "$statusf" "RUNNING"
   (
     set +e
     "$exec_path" "${flags[@]}" >"$log" 2>&1
     rc=$?
     echo "$rc" >"$rcfile"
+    st="DONE rc=$rc"
     if [ "$rc" -ne 0 ]; then
+      st="BLOCKED rc=$rc"
       {
         echo "BLOCKED: seat exited rc=$rc"
         echo
         tail -n 80 "$log"
       } >"$ans"
     elif [ ! -s "$log" ]; then
+      st="BLOCKED rc=$rc"
       echo "BLOCKED: empty output (rc=$rc). Check auth/quota/PTY." >"$ans"
     elif cli_agent_seat_blocked_log "$log"; then
+      st="BLOCKED rc=$rc"
       {
         echo "BLOCKED: provider error/quota"
         echo
@@ -177,6 +206,8 @@ for seat in "${SEATS[@]}"; do
       cp "$log" "$ans"
     fi
     echo "DONE rc=$rc" >>"$log"
+    # Status AFTER .md/.rc so watchers seeing terminal status can read answers.
+    cli_agent_write_status "$statusf" "$st"
     exit "$rc"
   ) &
   spid=$!
@@ -188,6 +219,7 @@ done
 
 if [ "${#PIDS[@]}" -eq 0 ]; then
   echo "error: no seats started" >&2
+  cli_agent_write_status "$OUTDIR/spawn.status" "DONE"
   cli_agent_result FAIL "no seats"
   exit 1
 fi
@@ -220,8 +252,12 @@ if [ "$WAIT" -eq 1 ]; then
       cli_agent_result PASS "$name"
     fi
   done
+  cli_agent_write_status "$OUTDIR/spawn.status" "DONE"
   exit "$fail"
 fi
 
-echo "spawned without wait; kill process groups with:"
-echo "  for f in $OUTDIR/*.pid; do kill -- \"-\$(tr -d '[:space:]' <\"\$f\")\" 2>/dev/null || kill \"\$(tr -d '[:space:]' <\"\$f\")\"; done"
+cli_agent_write_status "$OUTDIR/spawn.status" "SPAWNED"
+echo "spawned without wait; poll terminal seat status (not .md absence):"
+echo "  while grep -qlE '^RUNNING' $OUTDIR/*.status 2>/dev/null; do sleep 15; done"
+echo "kill process groups with:"
+echo "  for f in $OUTDIR/*.pid; do [ \"\$(basename \"\$f\")\" = spawn.pid ] && continue; kill -- \"-\$(tr -d '[:space:]' <\"\$f\")\" 2>/dev/null || kill \"\$(tr -d '[:space:]' <\"\$f\")\"; done"

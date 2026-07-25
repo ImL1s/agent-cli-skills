@@ -156,6 +156,7 @@ rc=$?
 set -e
 echo "$out" | grep -q 'CLI_AGENT_RESULT: BLOCKED fakecli' && pass "spawn missing=BLOCKED" || bad "spawn missing=BLOCKED: $out"
 [ "$rc" -ne 0 ] && pass "spawn missing nonzero" || bad "spawn missing nonzero rc=$rc"
+grep -qE '^BLOCKED rc=' "$SP2/out/fakecli.status" && pass "spawn missing status" || bad "spawn missing status: $(cat "$SP2/out/fakecli.status" 2>/dev/null)"
 # 429 in review text must NOT block
 mkdir -p "$SP2/skills/okcli-cli-agent"
 cat > "$SP2/skills/okcli-cli-agent/okcli-exec.sh" <<'EOS'
@@ -170,7 +171,21 @@ rc=$?
 set -e
 echo "$out" | grep -q 'CLI_AGENT_RESULT: PASS okcli' && pass "spawn 429 text=PASS" || bad "spawn 429 text=PASS: $out"
 [ "$rc" -eq 0 ] && pass "spawn 429 rc0" || bad "spawn 429 rc=$rc"
-rm -rf "$SP2"
+grep -qE '^DONE rc=0' "$SP2/out429/okcli.status" && pass "spawn ok status" || bad "spawn ok status"
+grep -qE '^DONE' "$SP2/out429/spawn.status" && pass "spawn parent status" || bad "spawn parent status"
+
+# --- brief -f same inode as outdir/brief.md (macOS /tmp vs /private/tmp) ---
+SP3="$(mktemp -d)"
+mkdir -p "$SP3/skills/okcli-cli-agent"
+cp "$SP2/skills/okcli-cli-agent/okcli-exec.sh" "$SP3/skills/okcli-cli-agent/okcli-exec.sh"
+echo "samefile brief" >"$SP3/brief.md"
+set +e
+out="$(AGENT_CLI_SKILLS_ROOT="$SP3" "$ROOT/skills/multi-cli-spawn/spawn.sh" --outdir "$SP3" -f "$SP3/brief.md" --seat okcli 2>&1)"
+rc=$?
+set -e
+echo "$out" | grep -qi 'are identical' && bad "spawn samefile brief: $out" || pass "spawn samefile brief"
+[ "$rc" -eq 0 ] && pass "spawn samefile rc0" || bad "spawn samefile rc=$rc out=$out"
+rm -rf "$SP2" "$SP3"
 
 # --- need_arg ---
 set +e

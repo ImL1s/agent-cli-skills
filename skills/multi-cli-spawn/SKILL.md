@@ -31,7 +31,24 @@ providers → N answer files.
 
 Seat modifiers (comma-separated after `:`): `readonly`/`r`, `team`/`ultracode`/`T`.
 
-Outputs per seat: `<outdir>/<name>.log`, `<name>.md` (answer or `BLOCKED:…`), `<name>.pid`.
+Outputs per seat: `<name>.log`, `<name>.md` (answer or `BLOCKED:…`), `<name>.pid`,
+`<name>.rc`, `<name>.status` (`RUNNING` → `DONE rc=0` | `BLOCKED rc=N`).
+
+Also: `spawn.pid`, `spawn.status` (`RUNNING` → `DONE` | `SPAWNED` for `--no-wait`).
+
+## Waiting contract
+
+1. **Default: do not poll.** Run `spawn.sh` in the foreground (wait mode). Its exit code and
+   `CLI_AGENT_RESULT: PASS|BLOCKED <seat>` lines are the completion signal.
+2. **`--no-wait` / external watcher:** wait until every seat `.status` is terminal
+   (`DONE` / `BLOCKED`), e.g.:
+   ```bash
+   while grep -qlE '^RUNNING' "$OUTDIR"/*.status 2>/dev/null; do sleep 15; done
+   ```
+   Do **not** treat missing `*.md` or a dead `*.pid` alone as "no answer" — `.md` appears only
+   when the seat finishes; pidfiles can look dead if the parent spawn was killed while seats
+   continue.
+3. Kill only via numeric PIDs in `*.pid` (process groups). Never `pkill -f` long patterns.
 
 ## Hard rules
 
@@ -43,5 +60,5 @@ Outputs per seat: `<outdir>/<name>.log`, `<name>.md` (answer or `BLOCKED:…`), 
 
 ## Synthesize
 
-Read all `*.md`. Strictest blockers win. Divergent findings are high value. Re-run only
-BLOCKED seats after the user refreshes quota/auth.
+Read `*.md` only for seats whose `.status` is terminal. Strictest blockers win. Divergent
+findings are high value. Re-run only BLOCKED seats after the user refreshes quota/auth.

@@ -63,3 +63,6 @@ Do not retry-loop.
 - Seat exit `rc != 0` → `BLOCKED` (missing binary / crash is not a vote).
 - Quota detection avoids bare `429` (review prose mentioning HTTP 429 must not wipe answers).
 - Parent enables `set -m` before backgrounding so pidfile PID == process group; kill with `kill -- -$pid`.
+- Per-seat `$key.status`: `RUNNING` → `DONE rc=0` | `BLOCKED rc=N` (atomic tmp+mv). Prefer
+  foreground wait; for `--no-wait` poll terminal `.status`, never `.md` absence alone.
+- Brief copy uses `[ file1 -ef file2 ]` so macOS `/tmp` vs `/private/tmp` does not trip `cp`.

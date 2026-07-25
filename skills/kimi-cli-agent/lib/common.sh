@@ -201,6 +201,14 @@ cli_agent_write_pid() {
   printf '%s\n' "$pid" >"$path"
 }
 
+# Atomic one-line status write (tmp + mv). Used by multi-cli-spawn seats.
+cli_agent_write_status() {
+  local path="$1"
+  local value="$2"
+  printf '%s\n' "$value" >"${path}.tmp"
+  mv "${path}.tmp" "$path"
+}
+
 cli_agent_kill_pidfile() {
   local path="$1"
   if [ -f "$path" ]; then
