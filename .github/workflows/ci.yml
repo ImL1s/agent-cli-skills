@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Ensure scripts executable
+        run: chmod +x install.sh scripts/*.sh skills/*/*.sh lib/*.py tests/*.sh
+
+      - name: Sync check (embedded lib matches root)
+        run: |
+          ./scripts/sync-embedded-lib.sh
+          if ! git diff --quiet -- skills/*/lib; then
+            echo "Embedded skills/*/lib out of sync with lib/. Run scripts/sync-embedded-lib.sh" >&2
+            git diff -- skills/*/lib | head -100
+            exit 1
+          fi
+
+      - name: Shell syntax
+        run: |
+          for f in lib/common.sh install.sh scripts/*.sh tests/*.sh skills/*/*.sh; do
+            bash -n "$f"
+          done
+
+      - name: Smoke tests
+        run: bash tests/smoke.sh
+
+      - name: Secret / path gate
+        run: |
+          if rg -n '/Users/[^/]+|WildCore|gho_|sk-ant-|BEGIN (RSA |OPENSSH )?PRIVATE' \
+               --glob '!.git/**' . ; then
+            echo "Forbidden personal path or secret-like token found" >&2
+            exit 1
+          fi
+          echo "secret gate ok"
+
+  pages-build:
+    name: docs jekyll build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate docs markdown present
+        run: |
+          test -f docs/index.md
+          test -f docs/INSTALL.md
+          test -f docs/FEATURES.md
+          test -f docs/CORRECTNESS.md
+          test -f docs/_config.yml

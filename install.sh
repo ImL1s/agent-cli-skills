@@ -55,7 +55,9 @@ link_one() {
     fi
     return 0
   fi
-  mkdir -p "$(dirname "$dest")"
+  if [ "$DRY" -eq 0 ]; then
+    mkdir -p "$(dirname "$dest")"
+  fi
   if [ -e "$dest" ] || [ -L "$dest" ]; then
     if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then
       echo "ok $dest"
@@ -70,7 +72,9 @@ link_one() {
 
 rc=0
 for t in "${TARGETS[@]}"; do
-  mkdir -p "$t"
+  if [ "$DRY" -eq 0 ]; then
+    mkdir -p "$t"
+  fi
   for skill_dir in "$SKILLS_SRC"/*/; do
     [ -d "$skill_dir" ] || continue
     name="$(basename "$skill_dir")"

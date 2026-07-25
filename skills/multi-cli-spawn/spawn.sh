@@ -10,14 +10,22 @@
 #   name:readonly         → -r
 #   name:ultracode|team   → -T (native multi-agent)
 #   name:readonly,team    → both
+#   name@label            → unique output key (avoids clobber on duplicate CLIs)
 #
 # Never use pkill -f with long patterns. Kill only via numeric PIDs in *.pid files.
 set -euo pipefail
 
-SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SELF_DIR/../.." && pwd)"
+if command -v realpath >/dev/null 2>&1; then
+  SELF_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]:-$0}")")"
+elif command -v python3 >/dev/null 2>&1; then
+  SELF_DIR="$(python3 -c 'import os,sys; print(os.path.dirname(os.path.realpath(sys.argv[1])))' "${BASH_SOURCE[0]:-$0}")"
+else
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
+fi
 # shellcheck source=/dev/null
-source "$ROOT/lib/common.sh"
+source "$SELF_DIR/lib/common.sh"
+ROOT="$CLI_AGENT_ROOT"
+CALLER_PWD="$PWD"
 
 OUTDIR=""
 PROMPTFILE=""
@@ -33,11 +41,11 @@ usage() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --outdir|-O) OUTDIR="$2"; shift 2 ;;
-    -f) PROMPTFILE="$2"; shift 2 ;;
-    --seat) SEATS+=("$2"); shift 2 ;;
-    -t) TIMEOUT="$2"; shift 2 ;;
-    -C) WORKDIR="$2"; shift 2 ;;
+    --outdir|-O) cli_agent_need_arg "$1" "${2:-}" || exit 2; OUTDIR="$2"; shift 2 ;;
+    -f) cli_agent_need_arg "$1" "${2:-}" || exit 2; PROMPTFILE="$2"; shift 2 ;;
+    --seat) cli_agent_need_arg "$1" "${2:-}" || exit 2; SEATS+=("$2"); shift 2 ;;
+    -t) cli_agent_need_arg "$1" "${2:-}" || exit 2; TIMEOUT="$2"; shift 2 ;;
+    -C) cli_agent_need_arg "$1" "${2:-}" || exit 2; WORKDIR="$2"; shift 2 ;;
     -r) READONLY_ALL=1; shift ;;
     --no-wait) WAIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -54,8 +62,10 @@ done
 [ "${#SEATS[@]}" -gt 0 ] || { echo "error: at least one --seat" >&2; exit 2; }
 
 mkdir -p "$OUTDIR"
+OUTDIR="$(cd "$OUTDIR" && pwd -P)"
 BRIEF="$OUTDIR/brief.md"
 if [ -n "$PROMPTFILE" ]; then
+  PROMPTFILE="$(cli_agent_abspath "$PROMPTFILE" "$CALLER_PWD")"
   cp "$PROMPTFILE" "$BRIEF"
 else
   cli_agent_load_prompt "" "$@" || exit $?
@@ -63,31 +73,52 @@ else
 fi
 
 resolve_exec() {
-  case "$1" in
-    agy) echo "$ROOT/skills/agy-cli-agent/agy-exec.sh" ;;
-    grok) echo "$ROOT/skills/grok-cli-agent/grok-exec.sh" ;;
-    kimi) echo "$ROOT/skills/kimi-cli-agent/kimi-exec.sh" ;;
-    qwen) echo "$ROOT/skills/qwen-cli-agent/qwen-exec.sh" ;;
-    codex) echo "$ROOT/skills/codex-cli-agent/codex-exec.sh" ;;
-    claude) echo "$ROOT/skills/claude-cli-agent/claude-exec.sh" ;;
-    *) return 1 ;;
-  esac
+  local short="$1"
+  local path
+  if path="$(cli_agent_find_exec "$short")"; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+  return 1
 }
 
 PIDS=()
 NAMES=()
+USED_KEYS=()
+
+key_taken() {
+  local k="$1" u
+  for u in "${USED_KEYS[@]+"${USED_KEYS[@]}"}"; do
+    [ "$u" = "$k" ] && return 0
+  done
+  return 1
+}
 
 for seat in "${SEATS[@]}"; do
-  name="${seat%%:*}"
+  label=""
+  body="$seat"
+  if [[ "$seat" == *@* ]]; then
+    label="${seat#*@}"
+    body="${seat%%@*}"
+  fi
+  name="${body%%:*}"
   meta=""
-  [[ "$seat" == *:* ]] && meta="${seat#*:}"
-  exec_path="$(resolve_exec "$name")" || {
-    echo "BLOCKED unknown seat: $seat" >"$OUTDIR/$name.md"
+  [[ "$body" == *:* ]] && meta="${body#*:}"
+
+  key="${label:-$name}"
+  if key_taken "$key"; then
+    echo "error: duplicate seat output key '$key' (use name@label)" >&2
+    exit 2
+  fi
+  USED_KEYS+=("$key")
+
+  if ! exec_path="$(resolve_exec "$name")"; then
+    echo "BLOCKED unknown seat: $seat" >"$OUTDIR/$key.md"
     echo "error: unknown seat CLI '$name'" >&2
     continue
-  }
+  fi
   if [ ! -x "$exec_path" ]; then
-    echo "BLOCKED: wrapper not executable: $exec_path" >"$OUTDIR/$name.md"
+    echo "BLOCKED: wrapper not executable: $exec_path" >"$OUTDIR/$key.md"
     continue
   fi
 
@@ -103,15 +134,15 @@ for seat in "${SEATS[@]}"; do
     esac
   done
 
-  log="$OUTDIR/$name.log"
-  ans="$OUTDIR/$name.md"
-  pidf="$OUTDIR/$name.pid"
+  log="$OUTDIR/$key.log"
+  ans="$OUTDIR/$key.md"
+  pidf="$OUTDIR/$key.pid"
 
   (
     set +e
+    set -m
     "$exec_path" "${flags[@]}" >"$log" 2>&1
     rc=$?
-    # Prefer cleaned log as answer; mark blocked on empty/quota-ish failures
     if [ ! -s "$log" ]; then
       echo "BLOCKED: empty output (rc=$rc). Check auth/quota/PTY." >"$ans"
     elif grep -qiE 'usage limit|rate limit|429|403 You.ve reached|Not logged in|Agent execution terminated due to error' "$log"; then
@@ -128,9 +159,15 @@ for seat in "${SEATS[@]}"; do
   spid=$!
   cli_agent_write_pid "$pidf" "$spid"
   PIDS+=("$spid")
-  NAMES+=("$name")
-  echo "started seat=$name pid=$spid log=$log"
+  NAMES+=("$key")
+  echo "started seat=$key pid=$spid log=$log"
 done
+
+if [ "${#PIDS[@]}" -eq 0 ]; then
+  echo "error: no seats started" >&2
+  cli_agent_result FAIL "no seats"
+  exit 1
+fi
 
 if [ "$WAIT" -eq 1 ]; then
   fail=0
@@ -145,8 +182,7 @@ if [ "$WAIT" -eq 1 ]; then
     fi
   done
   echo "answers in $OUTDIR/*.md"
-  # Summarize
-  for name in "${NAMES[@]}"; do
+  for name in "${NAMES[@]+"${NAMES[@]}"}"; do
     if grep -q '^BLOCKED' "$OUTDIR/$name.md" 2>/dev/null; then
       cli_agent_result BLOCKED "$name"
       fail=1
@@ -157,4 +193,5 @@ if [ "$WAIT" -eq 1 ]; then
   exit "$fail"
 fi
 
-echo "spawned without wait; kill with: for f in $OUTDIR/*.pid; do kill \$(cat \$f); done"
+echo "spawned without wait; kill with:"
+echo "  for f in $OUTDIR/*.pid; do kill -- \"-\$(cat \$f)\" 2>/dev/null || kill \"\$(cat \$f)\"; done"

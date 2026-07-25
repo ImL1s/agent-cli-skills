@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke tests: flag parsing, help, lib helpers — no live API calls required.
+# Smoke tests: flag parsing, help, symlink/copy install — no live API calls.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,6 +11,7 @@ pass() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*" >&2; fail=1; }
 
 chmod +x "$ROOT"/install.sh \
+  "$ROOT"/scripts/*.sh \
   "$ROOT"/skills/*/*.sh \
   "$ROOT"/lib/*.py 2>/dev/null || true
 
@@ -57,18 +58,56 @@ else
   pass "grok requires prompt"
 fi
 
-# --- install dry-run ---
-if "$ROOT/install.sh" --dry-run --target /tmp/cli-agent-skills-smoke >/dev/null; then
+# --- install dry-run (no mkdir of default homes — use temp target) ---
+DRY_T="$(mktemp -d)"
+if "$ROOT/install.sh" --dry-run --target "$DRY_T/skills" >/dev/null; then
   pass "install dry-run"
 else
   bad "install dry-run"
 fi
+rm -rf "$DRY_T"
+
+# --- symlink install then --help (Critical regression) ---
+SYM="$(mktemp -d)"
+"$ROOT/install.sh" --target "$SYM/skills" >/dev/null
+if "$SYM/skills/agy-cli-agent/agy-exec.sh" --help >/dev/null 2>&1; then
+  pass "symlink agy --help"
+else
+  bad "symlink agy --help"
+fi
+if "$SYM/skills/multi-cli-spawn/spawn.sh" --help >/dev/null 2>&1; then
+  pass "symlink spawn --help"
+else
+  bad "symlink spawn --help"
+fi
+rm -rf "$SYM"
+
+# --- copy install (embedded lib) ---
+CPY="$(mktemp -d)"
+cp -R "$ROOT/skills/claude-cli-agent" "$CPY/"
+if "$CPY/claude-cli-agent/claude-exec.sh" --help >/dev/null 2>&1; then
+  pass "copy claude --help"
+else
+  bad "copy claude --help"
+fi
+rm -rf "$CPY"
+
+# --- spawn empty seats / unknown ---
+SP="$(mktemp -d)"
+if "$ROOT/skills/multi-cli-spawn/spawn.sh" --outdir "$SP" --seat nope -f /dev/null >/dev/null 2>&1; then
+  # may exit nonzero; ensure no crash on empty PIDS wait
+  :
+fi
+# unknown seat should not unbound-variable crash
+set +e
+out="$("$ROOT/skills/multi-cli-spawn/spawn.sh" --outdir "$SP/out2" --seat nope -- "x" 2>&1)"
+rc=$?
+set -e
+echo "$out" | grep -qi 'unbound variable' && bad "spawn unbound" || pass "spawn no unbound ($rc)"
+rm -rf "$SP"
 
 # --- SKILL.md frontmatter present ---
-for s in agy grok kimi qwen codex claude multi-cli-spawn; do
-  # multi-cli-spawn skill dir name
-  dir="$s-cli-agent"
-  [ "$s" = "multi-cli-spawn" ] && dir="multi-cli-spawn"
+for dir in agy-cli-agent grok-cli-agent kimi-cli-agent qwen-cli-agent codex-cli-agent claude-cli-agent multi-cli-spawn; do
   f="$ROOT/skills/$dir/SKILL.md"
   if head -n 1 "$f" | grep -q '^---'; then
     pass "frontmatter $dir"
@@ -76,6 +115,22 @@ for s in agy grok kimi qwen codex claude multi-cli-spawn; do
     bad "frontmatter $dir"
   fi
 done
+
+# --- embedded lib present ---
+for dir in agy-cli-agent grok-cli-agent kimi-cli-agent qwen-cli-agent codex-cli-agent claude-cli-agent multi-cli-spawn; do
+  if [ -f "$ROOT/skills/$dir/lib/common.sh" ]; then
+    pass "embedded lib $dir"
+  else
+    bad "embedded lib $dir"
+  fi
+done
+
+# --- marketplace manifest ---
+if python3 -c 'import json; json.load(open("'"$ROOT"'/.claude-plugin/marketplace.json"))'; then
+  pass "marketplace.json"
+else
+  bad "marketplace.json"
+fi
 
 # --- pty_run.py help ---
 if python3 "$ROOT/lib/pty_run.py" --help >/dev/null 2>&1; then

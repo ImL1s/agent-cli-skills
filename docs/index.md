@@ -23,6 +23,7 @@ Skill wrappers and a cross-CLI spawn harness for popular agentic coding CLIs.
 
 ## Docs
 
+- [Install guide](INSTALL.md)
 - [Feature matrix](FEATURES.md)
 - [Correctness notes](CORRECTNESS.md)
 - [README (install & quick start)](https://github.com/ImL1s/agent-cli-skills#readme)

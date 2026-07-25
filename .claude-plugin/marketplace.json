@@ -1,0 +1,28 @@
+{
+  "name": "agent-cli-skills",
+  "owner": {
+    "name": "ImL1s",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Headless wrappers and Agent Skills for agy, Grok, Claude Code, Codex, Kimi, and Qwen, plus cross-CLI spawn",
+    "version": "1.1.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-cli-skills",
+      "description": "Multi-vendor coding CLI executor skills (agy/grok/claude/codex/kimi/qwen) and multi-cli-spawn",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/agy-cli-agent",
+        "./skills/grok-cli-agent",
+        "./skills/claude-cli-agent",
+        "./skills/codex-cli-agent",
+        "./skills/kimi-cli-agent",
+        "./skills/qwen-cli-agent",
+        "./skills/multi-cli-spawn"
+      ]
+    }
+  ]
+}

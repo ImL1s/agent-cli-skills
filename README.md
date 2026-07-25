@@ -1,5 +1,8 @@
 # agent-cli-skills
 
+[![skills.sh](https://skills.sh/b/ImL1s/agent-cli-skills)](https://skills.sh/ImL1s/agent-cli-skills)
+[![ci](https://github.com/ImL1s/agent-cli-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/ImL1s/agent-cli-skills/actions/workflows/ci.yml)
+
 Open-source **skill wrappers** for popular agentic coding CLIs. Use them as [Agent Skills](https://agentskills.io)-compatible packages, or as plain shell scripts from an orchestrator.
 
 | Skill | CLI | Wrapper |
@@ -16,15 +19,27 @@ Layout inspired by umbrella skill repos (e.g. Harzva’s everything-agent adapte
 
 ## Install
 
+Full details: [docs/INSTALL.md](docs/INSTALL.md) · site: https://iml1s.github.io/agent-cli-skills/
+
 ```bash
+# 1) Recommended — skills.sh marketplace CLI (Claude/Codex/Cursor/…)
+npx skills add ImL1s/agent-cli-skills -l
+npx skills add ImL1s/agent-cli-skills -g --all
+
+# 2) Claude Code plugin marketplace (from a clone)
 git clone https://github.com/ImL1s/agent-cli-skills.git && cd agent-cli-skills
-chmod +x install.sh skills/*/*.sh lib/*.py
-./install.sh                  # symlink into ~/.claude|codex|agents|gemini|qwen|kimi skills
-./install.sh --dry-run
-./install.sh --uninstall
+claude plugin marketplace add "$(pwd)"
+claude plugin install agent-cli-skills@agent-cli-skills
+
+# 3) Manual symlink into agent skill dirs
+./install.sh && ./install.sh --dry-run
+
+# 4) Zip / copy one skill (includes embedded lib/)
+cd skills && zip -r /tmp/agy-cli-agent.zip agy-cli-agent
 ```
 
 Requires the underlying CLI binaries on `PATH` (and auth for each provider you use).
+Headless wrappers skip permissions by default — prefer disposable git worktrees.
 
 ## Quick start
 

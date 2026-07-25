@@ -10,9 +10,15 @@
 #                [--skills-dir DIR] [--add-dir DIR]... [--no-git] [--] [PROMPT]
 set -euo pipefail
 
-SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+if command -v realpath >/dev/null 2>&1; then
+  SELF_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]:-$0}")")"
+elif command -v python3 >/dev/null 2>&1; then
+  SELF_DIR="$(python3 -c 'import os,sys; print(os.path.dirname(os.path.realpath(sys.argv[1])))' "${BASH_SOURCE[0]:-$0}")"
+else
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
+fi
 # shellcheck source=/dev/null
-source "$(cd "$SELF_DIR/../.." && pwd)/lib/common.sh"
+source "$SELF_DIR/lib/common.sh"
 
 MODEL="kimi-code/k3"
 TIMEOUT="1800s"
@@ -56,7 +62,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+CALLER_PWD="$PWD"
+
 cli_agent_require_bin kimi "$HOME/.kimi-code/bin" || exit 127
+if [ -n "$PROMPTFILE" ]; then
+  PROMPTFILE="$(cli_agent_abspath "$PROMPTFILE" "${CALLER_PWD:-$PWD}")"
+fi
 cd "$WORKDIR" || { echo "error: cannot cd into $WORKDIR" >&2; exit 1; }
 
 cli_agent_load_prompt "$PROMPTFILE" "$@" || exit $?
