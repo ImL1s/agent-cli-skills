@@ -50,18 +50,12 @@ jobs:
         run: bash tests/smoke.sh
 
       - name: Secret / path gate
-        run: |
-          if rg -n '/Users/[^/]+|WildCore|gho_|sk-ant-|BEGIN (RSA |OPENSSH )?PRIVATE' \
-               --glob '!.git/**' . ; then
-            echo "Forbidden personal path or secret-like token found" >&2
-            exit 1
-          fi
-          echo "secret gate ok"
+        run: bash scripts/check-secrets.sh
 
-  pages-build:
-    name: docs jekyll build
+  docs:
+    name: docs present
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,3 +67,4 @@ jobs:
           test -f docs/FEATURES.md
           test -f docs/CORRECTNESS.md
           test -f docs/_config.yml
+          test -f .claude-plugin/marketplace.json
